@@ -23,7 +23,7 @@ STATUS_FILE="${COMPARISON_ROOT}/resumen_corridas.tsv"
 #   "plantilla_3_sin_FLI_barrido.tsv"
 # )
 TEMPLATES=(
-    "plantilla_base.tsv"
+    "plantillas/plantilla_base.tsv"
 )
 
 ## Las raíces se obtienen de OUTDIR_BASE en cada fila de la plantilla.
@@ -56,13 +56,14 @@ FRAMEWORK_MODE="both"
 ## Los valores se pueden cambiar al lanzar el script, por ejemplo:
 ##   PIPELINE_R_CORES=3 BLAS_THREADS=1 bash este_script.sh
 ## ------------------------------------------------------------
-
-PIPELINE_R_CORES="${PIPELINE_R_CORES:-2}"
+PIPELINE_R_CORES="${PIPELINE_R_CORES:-1}"
 BRMS_INTERNAL_CORES="${BRMS_INTERNAL_CORES:-1}"
 BLAS_THREADS="${BLAS_THREADS:-1}"
-MIN_AVAILABLE_MEM_GB="${MIN_AVAILABLE_MEM_GB:-4}"
+MIN_AVAILABLE_MEM_GB="${MIN_AVAILABLE_MEM_GB:-12}"
 MEMORY_WAIT_SECONDS="${MEMORY_WAIT_SECONDS:-15}"
 MEMORY_WAIT_ATTEMPTS="${MEMORY_WAIT_ATTEMPTS:-8}"
+
+CMDSTAN_OPTIMIZATION_LEVEL="${CMDSTAN_OPTIMIZATION_LEVEL:-0}"
 
 for VALUE_NAME in   PIPELINE_R_CORES   BRMS_INTERNAL_CORES   BLAS_THREADS   MIN_AVAILABLE_MEM_GB   MEMORY_WAIT_SECONDS   MEMORY_WAIT_ATTEMPTS
 do
@@ -73,8 +74,18 @@ do
   fi
 done
 
+if [[ ! "${CMDSTAN_OPTIMIZATION_LEVEL}" =~ ^[0-3]$ ]]; then
+  echo "ERROR: CMDSTAN_OPTIMIZATION_LEVEL debe estar entre 0 y 3."
+  echo "Valor recibido: ${CMDSTAN_OPTIMIZATION_LEVEL}"
+  exit 1
+fi
 export PIPELINE_R_CORES
 export BRMS_INTERNAL_CORES
+export CMDSTAN_OPTIMIZATION_LEVEL
+
+## CmdStan lee O y genera -O0, -O1, -O2 o -O3.
+export O="${CMDSTAN_OPTIMIZATION_LEVEL}"
+
 export OMP_NUM_THREADS="${BLAS_THREADS}"
 export OPENBLAS_NUM_THREADS="${BLAS_THREADS}"
 export MKL_NUM_THREADS="${BLAS_THREADS}"
@@ -84,11 +95,15 @@ export NUMEXPR_NUM_THREADS="${BLAS_THREADS}"
 export STAN_NUM_THREADS="${BLAS_THREADS}"
 export TBB_NUM_THREADS="${BLAS_THREADS}"
 export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
-export MAKEFLAGS="-j${BLAS_THREADS}"
+
+## La compilación de CmdStan siempre será serial.
+export MAKEFLAGS="-j1"
+
 export MC_CORES="${BRMS_INTERNAL_CORES}"
 
 R_RUNTIME_DIR="${COMPARISON_ROOT}/.runtime_memoria"
 R_PROFILE_LIMITED="${R_RUNTIME_DIR}/Rprofile_pipeline_memoria.R"
+R_MAKEVARS_LIMITED="${R_RUNTIME_DIR}/Makevars_pipeline_memoria"
 
 ## ------------------------------------------------------------
 ## Validación
@@ -167,6 +182,59 @@ RS_PROFILE
 
 export R_PROFILE_USER="${R_PROFILE_LIMITED}"
 
+cat > "${R_MAKEVARS_LIMITED}" <<'MAKEVARS'
+MAKEFLAGS = -j1
+
+CXXFLAGS = -O0 -g0
+CXX11FLAGS = -O0 -g0
+CXX14FLAGS = -O0 -g0
+CXX17FLAGS = -O0 -g0
+MAKEVARS
+
+export R_MAKEVARS_USER="${R_MAKEVARS_LIMITED}"
+
+## ------------------------------------------------------------
+## Verificación real de la configuración de CmdStan
+## ------------------------------------------------------------
+
+CMDSTAN_PATH="$(
+  Rscript -e 'cat(cmdstanr::cmdstan_path())'
+)"
+
+if [[ ! -d "${CMDSTAN_PATH}" ]]; then
+  echo "ERROR: no existe la instalación de CmdStan:"
+  echo "${CMDSTAN_PATH}"
+  exit 1
+fi
+
+CMDSTAN_O_ACTIVE="$(
+  make \
+    --no-print-directory \
+    -s \
+    -C "${CMDSTAN_PATH}" \
+    print-compiler-flags |
+    awk '
+      /O \(Optimization Level\)/ && !found {
+        value = $NF
+        found = 1
+      }
+      END {
+        if (found) print value
+      }
+    '
+)"
+if [[ "${CMDSTAN_O_ACTIVE}" != "${CMDSTAN_OPTIMIZATION_LEVEL}" ]]; then
+  echo "ERROR: CmdStan no recibió el nivel de optimización esperado."
+  echo "Esperado: ${CMDSTAN_OPTIMIZATION_LEVEL}"
+  echo "Detectado: ${CMDSTAN_O_ACTIVE:-NO_DETECTADO}"
+  echo "Ruta: ${CMDSTAN_PATH}"
+  exit 1
+fi
+
+export CMDSTAN_PATH
+
+echo "CmdStan path          : ${CMDSTAN_PATH}"
+echo "CmdStan optimization  : -O${CMDSTAN_O_ACTIVE}"
 ## No sobrescribir el resumen anterior al reanudar.
 if [[ ! -f "${STATUS_FILE}" ]]; then
   printf \
@@ -305,6 +373,9 @@ PY
   echo "PIPELINE_R_CORES   : ${PIPELINE_R_CORES}"
   echo "BRMS_INTERNAL_CORES: ${BRMS_INTERNAL_CORES}"
   echo "BLAS_THREADS       : ${BLAS_THREADS}"
+  echo "CMDSTAN_PATH       : ${CMDSTAN_PATH}"
+  echo "CMDSTAN_OPTIMIZATION: -O${CMDSTAN_O_ACTIVE}"
+  echo "MAKEFLAGS          : ${MAKEFLAGS}"
 
   wait_for_memory
 
@@ -348,8 +419,13 @@ write_environment () {
     echo "PIPELINE_R_CORES=${PIPELINE_R_CORES}"
     echo "BRMS_INTERNAL_CORES=${BRMS_INTERNAL_CORES}"
     echo "BLAS_THREADS=${BLAS_THREADS}"
+    echo "CMDSTAN_PATH=${CMDSTAN_PATH}"
+    echo "CMDSTAN_OPTIMIZATION_LEVEL=${CMDSTAN_OPTIMIZATION_LEVEL}"
+    echo "CMDSTAN_O_ACTIVE=${CMDSTAN_O_ACTIVE}"
+    echo "MAKEFLAGS=${MAKEFLAGS}"
     echo "MIN_AVAILABLE_MEM_GB=${MIN_AVAILABLE_MEM_GB}"
     echo "R_PROFILE_USER=${R_PROFILE_USER}"
+    echo "R_MAKEVARS_USER=${R_MAKEVARS_USER}"
   } > "${FILE}"
 }
 
