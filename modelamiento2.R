@@ -3971,8 +3971,7 @@ if (nrow(mrmr_skipped_features_tbl) > 0) {
   )
 }
 
-detach("package:MOFA2", unload = TRUE)
-## ============================================================
+# ============================================================
 ## Selección del grid por CV interna estratificada
 ## Train: NP=6, SO=7, FD=3 -> K = 3
 ## Test queda intacto para evaluación final
@@ -3987,7 +3986,26 @@ K_cv <- 3
 ## Evita compilaciones Stan/rstan concurrentes.
 cores_cv <- 1L
 
+if ("package:MOFA2" %in% search()) {
+  detach("package:MOFA2", unload = TRUE)
+}
 
+rm(
+  list = intersect(
+    c(
+      "mod",
+      "rfm",
+      "tst_Data",
+      "pesos_list",
+      "weights_by_view",
+      "feature_score_base"
+    ),
+    ls(envir = .GlobalEnv)
+  ),
+  envir = .GlobalEnv
+)
+
+invisible(gc(full = TRUE))
 
 CV_BRM <- evaluate_brms_cv_grid(
   return.list = return.list,
@@ -4402,7 +4420,7 @@ fit_brm <- brms::brm(
   refresh   = 0,
   backend   = backend,
   control   = ctrl,
-  cores     = 4,
+  cores     = 1,
   seed      = 123,
   save_pars = brms::save_pars(all = TRUE)
 )
