@@ -42,7 +42,7 @@ BRMS_CHAINS_TEST  <- 2L
 BRMS_ITER_FINAL   <- 8000L
 BRMS_WARMUP_FINAL <- BRMS_ITER_FINAL %/% 2L
 BRMS_CHAINS_FINAL <- 4L
-BRMS_CORES_FINAL  <- 4L
+BRMS_CORES_FINAL  <- 1L
 PARETO_K_MOMENT_MATCH_THRESHOLD <- 0.70
 
 set.seed(SEED_GLOBAL)
@@ -3685,6 +3685,29 @@ if (nrow(mrmr_skipped_features_tbl) > 0) {
 ## La distribución de clases se audita dinámicamente con table(y_train).
 ## Test permanece intacto para evaluación final.
 ## ============================================================
+
+if ("package:MOFA2" %in% search()) {
+  detach("package:MOFA2", unload = TRUE)
+}
+
+rm(
+  list = intersect(
+    c(
+      "mod",
+      "rfm",
+      "tst_Data",
+      "pesos_list",
+      "weights_by_view",
+      "feature_score_base"
+    ),
+    ls(envir = .GlobalEnv)
+  ),
+  envir = .GlobalEnv
+)
+
+invisible(gc(full = TRUE))
+
+
 ref <- REF_CLASS
 backend <- .detect_backend_safe()
 
