@@ -23,7 +23,7 @@ STATUS_FILE="${COMPARISON_ROOT}/resumen_corridas.tsv"
 #   "plantilla_3_sin_FLI_barrido.tsv"
 # )
 TEMPLATES=(
-    "plantillas/plantilla_base.tsv"
+    "plantillas_v3_local/plantilla_base.tsv"
 )
 
 ## Las raíces se obtienen de OUTDIR_BASE en cada fila de la plantilla.
