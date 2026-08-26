@@ -73,6 +73,20 @@ TEMPLATES=(
   "${REPO_ROOT}/templates/current/plantilla_3_sin_FLI_barrido.tsv"
 )
 
+## ------------------------------------------------------------
+## Filtro operacional opcional
+##
+## Vacío = comportamiento normal: ejecutar todas las filas.
+##
+## Ejemplo de prueba de un único escenario:
+##
+##   ONLY_ANALYSIS_NAME=P1_ALL_qtx00_qpr00_qme00_qcl00 \
+##     bash scripts/run_comparacion_modelamiento2_vs_3.sh
+##
+## No modifica plantillas, metodología ni parámetros estadísticos.
+## ------------------------------------------------------------
+ONLY_ANALYSIS_NAME="${ONLY_ANALYSIS_NAME:-}"
+
 ## Pares ROOT_NAME + ANALYSIS_NAME leídos realmente de la plantilla.
 ## Se usan después para limitar el framework a esos escenarios exactos.
 SCENARIO_KEYS=()
@@ -172,6 +186,11 @@ echo "Workspace   : ${WORKSPACE_ROOT}"
 echo "Datos       : ${DATA_ROOT}"
 echo "Resultados  : ${RESULTS_ROOT}"
 echo "Comparación : ${COMPARISON_ROOT}"
+if [[ -n "${ONLY_ANALYSIS_NAME}" ]]; then
+  echo "Filtro      : SOLO ${ONLY_ANALYSIS_NAME}"
+else
+  echo "Filtro      : TODOS LOS ESCENARIOS"
+fi
 echo "============================================================"
 
 if [[ ! -d "${DATA_ROOT}" ]]; then
@@ -862,6 +881,7 @@ write_environment () {
     echo "MODEL_VARIANT=${MODEL_VARIANT}"
     echo "DIAG_TARGET=${DIAG_TARGET}"
     echo "TEMPLATE_FILE=${TEMPLATE_FILE}"
+    echo "ONLY_ANALYSIS_NAME=${ONLY_ANALYSIS_NAME}"
     echo "PIPELINE_R_CORES=${PIPELINE_R_CORES}"
     echo "BRMS_INTERNAL_CORES=${BRMS_INTERNAL_CORES}"
     echo "BLAS_THREADS=${BLAS_THREADS}"
@@ -986,6 +1006,12 @@ do
 
     ## Saltar cabecera.
     [[ "${ANALYSIS_NAME}" == "ANALYSIS_NAME" ]] && continue
+
+    ## Filtro operacional opcional para pruebas de un único escenario.
+    if [[ -n "${ONLY_ANALYSIS_NAME}" &&
+          "${ANALYSIS_NAME}" != "${ONLY_ANALYSIS_NAME}" ]]; then
+      continue
+    fi
 
     if [[ -z "${TEMPLATE_OUTDIR_BASE}" ]]; then
       echo "ERROR: OUTDIR_BASE vacío en ${ANALYSIS_NAME}"
@@ -1244,6 +1270,12 @@ do
   done < "${TEMPLATE_FILE}"
 
 done
+
+if [[ -n "${ONLY_ANALYSIS_NAME}" && "${RUN_ID}" -eq 0 ]]; then
+  echo "ERROR: no se encontró el escenario solicitado:"
+  echo "  ${ONLY_ANALYSIS_NAME}"
+  exit 1
+fi
 
 ## ------------------------------------------------------------
 ## Ejecutar el framework solo en los escenarios de la plantilla
