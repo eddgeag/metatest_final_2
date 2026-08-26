@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "${ROOT}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd -P)"
+WORKSPACE_ROOT="$(cd -- "${REPO_ROOT}/.." >/dev/null 2>&1 && pwd -P)"
+DATA_ROOT="${DATA_ROOT:-${WORKSPACE_ROOT}/data}"
+RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_ROOT}/results}"
+COMPARISON_ROOT="${COMPARISON_ROOT:-${RESULTS_ROOT}/comparacion_modelamientos}"
+export REPO_ROOT WORKSPACE_ROOT DATA_ROOT RESULTS_ROOT COMPARISON_ROOT
+cd "${REPO_ROOT}"
 
-CONFIG_FILE="${CONFIG_FILE:-${ROOT}/recursos_servidor.env}"
+CONFIG_FILE="${CONFIG_FILE:-${REPO_ROOT}/config/recursos_servidor.env}"
 [[ -f "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
 
 MODE="${1:---background}"
-RUN_BASE="${ROOT}/.server_runs"
+RUN_BASE="${RESULTS_ROOT}/.server_runs"
 CURRENT="${RUN_BASE}/current"
 LOCK_FILE="${RUN_BASE}/pipeline.lock"
 mkdir -p "${RUN_BASE}"
@@ -57,7 +63,7 @@ if [[ "${MODE}" == "--foreground" ]]; then
   ln -sfn "${RUN_DIR}" "${CURRENT}"
   echo "$$" > "${RUN_DIR}/pipeline.pid"
   echo "$(ps -o pgid= -p $$ | tr -d ' ')" > "${RUN_DIR}/pipeline.pgid"
-  ./01_preflight_servidor.sh > "${RUN_DIR}/preflight_lanzamiento.log" 2>&1
+  "${SCRIPT_DIR}/01_preflight_servidor.sh" > "${RUN_DIR}/preflight_lanzamiento.log" 2>&1
 fi
 
 if [[ "${MODE}" == "--worker" || "${MODE}" == "--foreground" ]]; then
@@ -82,7 +88,11 @@ if [[ "${MODE}" == "--worker" || "${MODE}" == "--foreground" ]]; then
   MEMORY_WAIT_ATTEMPTS="${MEMORY_WAIT_ATTEMPTS:-0}"
   MIN_FREE_DISK_GB="${MIN_FREE_DISK_GB:-100}"
   CMDSTAN_OPTIMIZATION_LEVEL="${CMDSTAN_OPTIMIZATION_LEVEL:-0}"
-  ORCHESTRATOR="${ORCHESTRATOR:-run_comparacion_modelamiento2_vs_3_memoria_servidor.sh}"
+  ORCHESTRATOR="${ORCHESTRATOR:-scripts/run_comparacion_modelamiento2_vs_3.sh}"
+  if [[ "${ORCHESTRATOR}" != /* ]]; then
+    ORCHESTRATOR="${REPO_ROOT}/${ORCHESTRATOR}"
+  fi
+  [[ -f "${ORCHESTRATOR}" ]] || { echo "ERROR: no existe el orquestador: ${ORCHESTRATOR}"; exit 1; }
 
   if (( MEM_VISIBLE_GB < MIN_AVAILABLE_MEM_GB + 2 )); then
     echo "ERROR: memoria visible=${MEM_VISIBLE_GB} GiB; el umbral de inicio es ${MIN_AVAILABLE_MEM_GB} GiB."
@@ -90,7 +100,7 @@ if [[ "${MODE}" == "--worker" || "${MODE}" == "--foreground" ]]; then
     exit 1
   fi
 
-  FREE_GB="$(df -Pk "${ROOT}" | awk 'NR==2 {print int($4/1024/1024)}')"
+  FREE_GB="$(df -Pk "${RESULTS_ROOT}" | awk 'NR==2 {print int($4/1024/1024)}')"
   if (( FREE_GB < MIN_FREE_DISK_GB )); then
     echo "ERROR: espacio libre=${FREE_GB} GiB; mínimo=${MIN_FREE_DISK_GB} GiB."
     exit 1
@@ -112,7 +122,7 @@ if [[ "${MODE}" == "--worker" || "${MODE}" == "--foreground" ]]; then
   export PIPELINE_R_CORES BRMS_INTERNAL_CORES BLAS_THREADS
   export MIN_AVAILABLE_MEM_GB MEMORY_WAIT_SECONDS MEMORY_WAIT_ATTEMPTS
   export CMDSTAN_OPTIMIZATION_LEVEL
-  export PAUSE_FILE="${ROOT}/PAUSAR_PIPELINE"
+  export PAUSE_FILE="${RUN_BASE}/PAUSAR_PIPELINE"
 
   rm -f "${PAUSE_FILE}"
   exec bash "${ORCHESTRATOR}"
@@ -128,14 +138,16 @@ RUN_DIR="${RUN_BASE}/${RUN_ID}"
 mkdir -p "${RUN_DIR}"
 ln -sfn "${RUN_DIR}" "${CURRENT}"
 
-./01_preflight_servidor.sh > "${RUN_DIR}/preflight_lanzamiento.log" 2>&1
+"${SCRIPT_DIR}/01_preflight_servidor.sh" > "${RUN_DIR}/preflight_lanzamiento.log" 2>&1
 
-sha256sum renv.lock ./*.R ./*.sh plantillas/*.tsv \
+sha256sum renv.lock scripts/pipeline/*.R scripts/reproducibility/*.sh \
+  scripts/run_comparacion_modelamiento2_vs_3.sh templates/current/*.tsv \
+  config/*.env scripts/utilities/*.R \
   > "${RUN_DIR}/SHA256SUMS_lanzamiento.txt" 2>/dev/null || true
 git status --short > "${RUN_DIR}/git_status.txt" 2>/dev/null || true
 git rev-parse HEAD > "${RUN_DIR}/git_commit.txt" 2>/dev/null || true
 
-RUNNER=("${ROOT}/03_lanzar_pipeline_servidor.sh" --worker)
+RUNNER=("${SCRIPT_DIR}/03_lanzar_pipeline_servidor.sh" --worker)
 NICE_LEVEL="${NICE_LEVEL:-10}"
 if command -v ionice >/dev/null 2>&1; then
   LAUNCH=(ionice -c "${IONICE_CLASS:-2}" -n "${IONICE_LEVEL:-7}" nice -n "${NICE_LEVEL}")
@@ -160,5 +172,5 @@ echo "PIPELINE INICIADO"
 echo "PID/PGID: ${PID}"
 echo "RUN: ${RUN_DIR}"
 echo "LOG: ${RUN_DIR}/pipeline_master.log"
-echo "Estado: ./04_estado_pipeline.sh"
-echo "Pausa segura: touch PAUSAR_PIPELINE"
+echo "Estado: ${SCRIPT_DIR}/04_estado_pipeline.sh"
+echo "Pausa segura: touch ${RUN_BASE}/PAUSAR_PIPELINE"

@@ -9333,6 +9333,11 @@
       "NeedsCompilation": "no",
       "Repository": "CRAN"
     },
+    "renv": {
+      "Package": "renv",
+      "Version": "1.2.0",
+      "Source": "Repository"
+    },
     "reshape2": {
       "Package": "reshape2",
       "Version": "1.4.4",

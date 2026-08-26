@@ -53,7 +53,7 @@ set.seed(123)
 
 ## ============================================================
 ## 0) CONFIGURACIÓN PARAMETRIZADA
-## Lee parámetros desde run_pipeline_from_template.sh
+## Lee parámetros desde scripts/run_comparacion_modelamiento2_vs_3.sh
 ## ============================================================
 
 get_env_chr <- function(name, default = NULL, required = FALSE) {

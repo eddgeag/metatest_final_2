@@ -1,38 +1,86 @@
 # ============================================================
-# POLÍTICA: IGNORAR TODO POR DEFECTO
+# METATEST
+# Ignorar por defecto y versionar explícitamente únicamente
+# código, configuración, plantillas y recursos reproducibles.
 # ============================================================
 
 *
 
-# Permitir que Git recorra las carpetas
+# Permitir recorrer directorios
 !*/
 
 # ============================================================
-# CÓDIGO PERMITIDO
+# CÓDIGO
 # ============================================================
 
 !*.R
 !*.sh
 
 # ============================================================
-# TSV: SOLO PLANTILLAS O CONFIGURACIONES
+# DOCUMENTACIÓN
 # ============================================================
 
+!*.md
+!*.Rproj
+!LICENSE
+!LICENSE.*
+
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
+
+!/config/
+!/config/*.env
+
+# ============================================================
+# PLANTILLAS
+# ============================================================
+
+!/templates/
+!/templates/**/*.tsv
+
+# Compatibilidad histórica mientras exista
 !/plantillas/
-!/plantillas/*.tsv
 !/plantillas/**/*.tsv
 
 # ============================================================
-# ARCHIVOS ADMINISTRATIVOS DEL REPOSITORIO
+# REPRODUCIBILIDAD
 # ============================================================
 
-!*.Rproj
-!.gitignore
-!README.md
-!LICENSE
+!/reproducibilidad/
+!/reproducibilidad/*.txt
 
 # ============================================================
-# ARCHIVOS LOCALES DE R QUE NUNCA DEBEN SUBIRSE
+# RENV
+# ============================================================
+
+!/.renvignore
+!/renv.lock
+!/renv/
+!/renv/activate.R
+!/renv/settings.json
+
+renv/library/
+renv/staging/
+renv/cellar/
+renv/python/
+renv/sandbox/
+
+# ============================================================
+# REFERENCE MAPS
+#
+# Outputs regenerables. La fuente de verdad está en:
+# scripts/utilities/crear_mapa_clinico_maestro.R
+# scripts/utilities/crear_mapa_proteico_maestro.R
+# ============================================================
+
+/reference_maps/
+
+# Builds temporales del generador atómico
+/.reference_maps_build.*/
+
+# ============================================================
+# ESTADO LOCAL DE R
 # ============================================================
 
 .Rproj.user/
@@ -40,11 +88,9 @@
 .RData
 .Ruserdata
 .Renviron
-renv/library/
-renv/staging/
 
 # ============================================================
-# ARCHIVOS TEMPORALES
+# TEMPORALES / LOGS
 # ============================================================
 
 *.log
@@ -53,3 +99,32 @@ renv/staging/
 *.tmp
 *.bak
 *~
+*.swp
+*.swo
+
+# ============================================================
+# RESULTADOS
+# ============================================================
+
+/comparacion_modelamientos/
+/results/
+/.server_runs/
+
+# Runtime generado por el orquestador
+/.runtime_memoria/
+**/.runtime_memoria/
+
+# ============================================================
+# DATOS / OBJETOS PESADOS
+# ============================================================
+
+*.rds
+*.RDS
+*.rda
+*.xlsx
+*.xls
+*.parquet
+*.feather
+*.fst
+*.h5
+*.hdf5

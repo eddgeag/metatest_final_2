@@ -9,8 +9,8 @@ set -euo pipefail
 ##   escenario y copia ese mismo upstream a las dos variantes.
 ## - Reanuda por artefactos reales; no confía únicamente en markers.
 ## - Guarda todo separado en:
-##     ./comparacion_modelamientos/modelamiento2/
-##     ./comparacion_modelamientos/modelamiento3/
+##     ${COMPARISON_ROOT}/modelamiento2/
+##     ${COMPARISON_ROOT}/modelamiento3/
 ## - Ejecuta el framework únicamente en cada ANALYSIS_NAME leído
 ##   de la plantilla; nunca barre otros escenarios históricos.
 ## - Usa FRAMEWORK_BIDIRECCIONAL.R original sin modificarlo. Para
@@ -19,17 +19,58 @@ set -euo pipefail
 ##   con sufijo memoria.
 ## ============================================================
 
-COMPARISON_ROOT="./comparacion_modelamientos"
+
+## ------------------------------------------------------------
+## Rutas del proyecto
+##
+## Estructura esperada:
+##
+##   workspace/
+##   ├── metatest/     <- repositorio Git
+##   ├── data/         <- datos de entrada
+##   └── results/      <- resultados
+## ------------------------------------------------------------
+
+SCRIPT_DIR="$(
+  cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1
+  pwd -P
+)"
+
+REPO_ROOT="$(
+  cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1
+  pwd -P
+)"
+
+WORKSPACE_ROOT="$(
+  cd -- "${REPO_ROOT}/.." >/dev/null 2>&1
+  pwd -P
+)"
+
+DATA_ROOT="${DATA_ROOT:-${WORKSPACE_ROOT}/data}"
+RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_ROOT}/results}"
+
+COMPARISON_ROOT="${COMPARISON_ROOT:-${RESULTS_ROOT}/comparacion_modelamientos}"
+PAUSE_FILE="${PAUSE_FILE:-${RESULTS_ROOT}/.server_runs/PAUSAR_PIPELINE}"
+
 SHARED_ROOT="${COMPARISON_ROOT}/upstream_comun"
 STATUS_FILE="${COMPARISON_ROOT}/resumen_corridas.tsv"
-# 
-# TEMPLATES=(
-#   "plantilla_1_todas_clinicas_barrido.tsv"
-#   "plantilla_2_con_FLI_barrido.tsv"
-#   "plantilla_3_sin_FLI_barrido.tsv"
-# )
+
+## Mantener el directorio de trabajo en la raíz del repositorio.
+## Esto conserva compatibles las rutas relativas ../data/... de
+## preprocess_data.R y permite encontrar reference_maps/.
+cd "${REPO_ROOT}"
+
+export REPO_ROOT
+export WORKSPACE_ROOT
+export DATA_ROOT
+export RESULTS_ROOT
+export COMPARISON_ROOT
+
+
 TEMPLATES=(
-    "plantillas_v3_local/plantilla_base.tsv"
+  "${REPO_ROOT}/templates/current/plantilla_1_todas_clinicas_barrido.tsv"
+  "${REPO_ROOT}/templates/current/plantilla_2_con_FLI_barrido.tsv"
+  "${REPO_ROOT}/templates/current/plantilla_3_sin_FLI_barrido.tsv"
 )
 
 ## Pares ROOT_NAME + ANALYSIS_NAME leídos realmente de la plantilla.
@@ -38,13 +79,17 @@ SCENARIO_KEYS=()
 declare -A SCENARIO_KEYS_SEEN=()
 
 MODEL_LABELS=("modelamiento2" "modelamiento3")
-MODEL_SCRIPTS=("modelamiento2.R" "modelamiento3.R")
 
-PREPROCESS_SCRIPT="preprocess_data.R"
-INTEGRATION_SCRIPT="INTEGRACION.R"
-PANEL_SCRIPT="panel_final_multimodelo.R"
-DOWNSTREAM_SCRIPT="downstream.R"
-FRAMEWORK_SCRIPT="FRAMEWORK_BIDIRECCIONAL.R"
+MODEL_SCRIPTS=(
+  "${REPO_ROOT}/scripts/pipeline/modelamiento2.R"
+  "${REPO_ROOT}/scripts/pipeline/modelamiento3.R"
+)
+
+PREPROCESS_SCRIPT="${REPO_ROOT}/scripts/pipeline/preprocess_data.R"
+INTEGRATION_SCRIPT="${REPO_ROOT}/scripts/pipeline/INTEGRACION.R"
+PANEL_SCRIPT="${REPO_ROOT}/scripts/pipeline/panel_final_multimodelo.R"
+DOWNSTREAM_SCRIPT="${REPO_ROOT}/scripts/pipeline/downstream.R"
+FRAMEWORK_SCRIPT="${REPO_ROOT}/scripts/pipeline/FRAMEWORK_BIDIRECCIONAL.R"
 
 FRAMEWORK_DIAG="diagnostico_bayes_features"
 FRAMEWORK_MODE="both"
@@ -71,7 +116,7 @@ MEMORY_WAIT_ATTEMPTS="${MEMORY_WAIT_ATTEMPTS:-8}"
 
 CMDSTAN_OPTIMIZATION_LEVEL="${CMDSTAN_OPTIMIZATION_LEVEL:-0}"
 
-for VALUE_NAME in   PIPELINE_R_CORES   BRMS_INTERNAL_CORES   BLAS_THREADS   MIN_AVAILABLE_MEM_GB   MEMORY_WAIT_SECONDS   MEMORY_WAIT_ATTEMPTS
+for VALUE_NAME in   PIPELINE_R_CORES   BRMS_INTERNAL_CORES   BLAS_THREADS   MIN_AVAILABLE_MEM_GB   MEMORY_WAIT_SECONDS
 do
   VALUE="${!VALUE_NAME}"
   if [[ ! "${VALUE}" =~ ^[0-9]+$ ]] || (( VALUE < 1 )); then
@@ -79,6 +124,11 @@ do
     exit 1
   fi
 done
+
+if [[ ! "${MEMORY_WAIT_ATTEMPTS}" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: MEMORY_WAIT_ATTEMPTS debe ser un entero >= 0; 0 significa esperar sin límite."
+  exit 1
+fi
 
 if [[ ! "${CMDSTAN_OPTIMIZATION_LEVEL}" =~ ^[0-3]$ ]]; then
   echo "ERROR: CMDSTAN_OPTIMIZATION_LEVEL debe estar entre 0 y 3."
@@ -111,6 +161,25 @@ R_RUNTIME_DIR="${COMPARISON_ROOT}/.runtime_memoria"
 R_PROFILE_LIMITED="${R_RUNTIME_DIR}/Rprofile_pipeline_memoria.R"
 R_MAKEVARS_LIMITED="${R_RUNTIME_DIR}/Makevars_pipeline_memoria"
 R_FRAMEWORK_EXACT_LAUNCHER="${R_RUNTIME_DIR}/run_framework_exact_scenario.R"
+
+
+
+echo "============================================================"
+echo "RUTAS DEL PIPELINE"
+echo "============================================================"
+echo "Repositorio : ${REPO_ROOT}"
+echo "Workspace   : ${WORKSPACE_ROOT}"
+echo "Datos       : ${DATA_ROOT}"
+echo "Resultados  : ${RESULTS_ROOT}"
+echo "Comparación : ${COMPARISON_ROOT}"
+echo "============================================================"
+
+if [[ ! -d "${DATA_ROOT}" ]]; then
+  echo "ERROR: no existe el directorio de datos:"
+  echo "  ${DATA_ROOT}"
+  exit 1
+fi
+
 
 ## ------------------------------------------------------------
 ## Validación
@@ -337,7 +406,9 @@ wait_for_memory () {
   local AVAILABLE_KB
   local AVAILABLE_GB
 
-  for ((ATTEMPT = 1; ATTEMPT <= MEMORY_WAIT_ATTEMPTS; ATTEMPT++)); do
+  ATTEMPT=0
+  while :; do
+    ATTEMPT=$((ATTEMPT + 1))
     AVAILABLE_KB="$(available_memory_kb)"
     AVAILABLE_KB="${AVAILABLE_KB:-0}"
     AVAILABLE_GB="$(awk -v kb="${AVAILABLE_KB}" 'BEGIN {printf "%.2f", kb/1024/1024}')"
@@ -348,14 +419,156 @@ wait_for_memory () {
     fi
 
     echo "AVISO: solo hay ${AVAILABLE_GB} GiB disponibles; se requieren ${MIN_AVAILABLE_MEM_GB} GiB."
-    echo "Esperando ${MEMORY_WAIT_SECONDS} s para que el sistema libere memoria (${ATTEMPT}/${MEMORY_WAIT_ATTEMPTS})..."
+    if (( MEMORY_WAIT_ATTEMPTS > 0 )); then
+      echo "Esperando ${MEMORY_WAIT_SECONDS} s para que el sistema libere memoria (${ATTEMPT}/${MEMORY_WAIT_ATTEMPTS})..."
+    else
+      echo "Esperando ${MEMORY_WAIT_SECONDS} s para que el sistema libere memoria (intento ${ATTEMPT}, sin límite)..."
+    fi
     sleep "${MEMORY_WAIT_SECONDS}"
+
+    if (( MEMORY_WAIT_ATTEMPTS > 0 && ATTEMPT >= MEMORY_WAIT_ATTEMPTS )); then
+      break
+    fi
   done
 
   echo "ERROR: no se alcanzaron ${MIN_AVAILABLE_MEM_GB} GiB de RAM disponible."
   echo "Cierra otros procesos o aumenta swap antes de reanudar."
   return 1
 }
+
+check_pause_request () {
+  if [[ -e "${PAUSE_FILE}" ]]; then
+    echo
+    echo "PAUSA SOLICITADA: ${PAUSE_FILE}"
+    echo "El pipeline se detiene en un límite seguro. Elimina el archivo y vuelve a lanzarlo para reanudar."
+    exit 75
+  fi
+}
+
+## ------------------------------------------------------------
+## Reference maps globales
+##
+## Los mapas clínicos y proteicos son outputs regenerables.
+## Sus fuentes de verdad son:
+##
+##   scripts/utilities/crear_mapa_clinico_maestro.R
+##   scripts/utilities/crear_mapa_proteico_maestro.R
+##
+## Se generan una sola vez antes de procesar escenarios.
+## Primero se construyen y validan en un directorio temporal.
+## Solo después se publican en REPO_ROOT/reference_maps.
+## ------------------------------------------------------------
+
+generate_reference_maps () {
+  local REF_DIR="${REPO_ROOT}/reference_maps"
+  local CLINICAL_SCRIPT="${REPO_ROOT}/scripts/utilities/crear_mapa_clinico_maestro.R"
+  local PROTEIN_SCRIPT="${REPO_ROOT}/scripts/utilities/crear_mapa_proteico_maestro.R"
+
+  local TMP_DIR
+  local F
+  local TMP_TARGET
+  local N_UPDATED=0
+
+  local REQUIRED_MAPS=(
+    "clinical_master_map.tsv"
+    "clinical_master_alias_map.tsv"
+    "clinical_manual_map_master.csv"
+    "protein_master_map.tsv"
+    "protein_master_alias_map.tsv"
+    "protein_manual_map_master.csv"
+    "protein_manual_map_by_label.csv"
+    "protein_enrichment_gene_sets.tsv"
+  )
+
+  echo
+  echo "============================================================"
+  echo "GENERACIÓN DE REFERENCE MAPS"
+  echo "============================================================"
+  echo "Destino: ${REF_DIR}"
+
+  if [[ ! -f "${CLINICAL_SCRIPT}" ]]; then
+    echo "ERROR: no existe:"
+    echo "  ${CLINICAL_SCRIPT}"
+    return 1
+  fi
+
+  if [[ ! -f "${PROTEIN_SCRIPT}" ]]; then
+    echo "ERROR: no existe:"
+    echo "  ${PROTEIN_SCRIPT}"
+    return 1
+  fi
+
+  TMP_DIR="$(mktemp -d "${REPO_ROOT}/.reference_maps_build.XXXXXX")"
+
+  if ! Rscript "${CLINICAL_SCRIPT}" "${TMP_DIR}"; then
+    echo "ERROR: falló la generación del mapa clínico."
+    rm -rf -- "${TMP_DIR}"
+    return 1
+  fi
+
+  if ! Rscript "${PROTEIN_SCRIPT}" "${TMP_DIR}"; then
+    echo "ERROR: falló la generación del mapa proteico."
+    rm -rf -- "${TMP_DIR}"
+    return 1
+  fi
+
+  for F in "${REQUIRED_MAPS[@]}"; do
+    if [[ ! -s "${TMP_DIR}/${F}" ]]; then
+      echo "ERROR: no se generó correctamente:"
+      echo "  ${F}"
+      rm -rf -- "${TMP_DIR}"
+      return 1
+    fi
+  done
+
+  mkdir -p "${REF_DIR}"
+
+  for F in "${REQUIRED_MAPS[@]}"; do
+
+    ## Si el mapa existente ya es idéntico, no tocarlo.
+    if [[ -f "${REF_DIR}/${F}" ]] &&
+       cmp -s "${TMP_DIR}/${F}" "${REF_DIR}/${F}"; then
+      continue
+    fi
+
+    TMP_TARGET="${REF_DIR}/.${F}.tmp.$$"
+
+    if ! cp -f -- "${TMP_DIR}/${F}" "${TMP_TARGET}"; then
+      echo "ERROR copiando mapa temporal:"
+      echo "  ${F}"
+      rm -f -- "${TMP_TARGET}"
+      rm -rf -- "${TMP_DIR}"
+      return 1
+    fi
+
+    if ! mv -f -- "${TMP_TARGET}" "${REF_DIR}/${F}"; then
+      echo "ERROR publicando mapa:"
+      echo "  ${F}"
+      rm -f -- "${TMP_TARGET}"
+      rm -rf -- "${TMP_DIR}"
+      return 1
+    fi
+
+    N_UPDATED=$((N_UPDATED + 1))
+  done
+
+  rm -rf -- "${TMP_DIR}"
+
+  echo
+  echo "REFERENCE MAPS COMPLETOS"
+  echo "Archivos esperados: ${#REQUIRED_MAPS[@]}"
+  echo "Archivos actualizados: ${N_UPDATED}"
+
+  if (( N_UPDATED == 0 )); then
+    echo "Los mapas existentes ya eran idénticos."
+  fi
+
+  echo "============================================================"
+  echo
+
+  return 0
+}
+
 
 remember_scenario () {
   local ROOT="$1"
@@ -731,9 +944,15 @@ run_downstream () {
 ## Plantilla(s) × escenarios definidos en cada TSV × 2 modelamientos
 ## ------------------------------------------------------------
 
+## Los reference_maps se preparan una sola vez antes de
+## procesar cualquier escenario o modelamiento.
+generate_reference_maps
+
 RUN_ID=0
 
 for TEMPLATE_INDEX in "${!TEMPLATES[@]}"; do
+
+  check_pause_request
 
   TEMPLATE_FILE="${TEMPLATES[${TEMPLATE_INDEX}]}"
 
@@ -776,6 +995,8 @@ do
     ## Cada fila decide su familia: escenarios, con FLI o sin FLI.
     ROOT_NAME="$(resolve_root_name "${TEMPLATE_OUTDIR_BASE}")"
     remember_scenario "${ROOT_NAME}" "${ANALYSIS_NAME}"
+
+    check_pause_request
 
     RUN_ID=$((RUN_ID + 1))
 
@@ -874,6 +1095,8 @@ do
     ## ==========================================================
 
     for MODEL_INDEX in "${!MODEL_LABELS[@]}"; do
+
+      check_pause_request
 
       MODEL_VARIANT="${MODEL_LABELS[${MODEL_INDEX}]}"
       MODEL_SCRIPT="${MODEL_SCRIPTS[${MODEL_INDEX}]}"
@@ -1029,6 +1252,8 @@ done
 for MODEL_VARIANT in "${MODEL_LABELS[@]}"; do
 
   for SCENARIO_KEY in "${SCENARIO_KEYS[@]}"; do
+
+    check_pause_request
 
     IFS=$'\x1f' read -r ROOT_NAME ANALYSIS_NAME <<< "${SCENARIO_KEY}"
 

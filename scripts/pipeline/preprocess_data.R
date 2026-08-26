@@ -10,7 +10,7 @@ library(ggrepel)
 # ============================================================
 # CONFIGURACIÓN PARAMETRIZABLE DEL ANÁLISIS
 # Se puede controlar desde bash con variables de entorno.
-# Se controla desde bash mediante run_pipeline_from_template.sh.
+# Se controla desde bash mediante scripts/run_comparacion_modelamiento2_vs_3.sh.
 # ANALYSIS_NAME y CLINICAL_INCLUDE son obligatorios.
 # ============================================================
 
@@ -76,9 +76,10 @@ ascii_feature_names <- function(x) {
 }
 
 
-
 ANALYSIS_NAME <- get_env_chr("ANALYSIS_NAME", required = TRUE)
 OUTDIR_BASE   <- get_env_chr("OUTDIR_BASE", ".")
+DATA_ROOT     <- get_env_chr("DATA_ROOT", "../data")
+
 
 Q_TX <- get_env_num("Q_TX", 0.97)
 Q_PR <- get_env_num("Q_PR", 0.40)
@@ -87,6 +88,66 @@ Q_CL <- get_env_num("Q_CL", 0.70)
 
 OUTPUT_DIR <- file.path(OUTDIR_BASE, ANALYSIS_NAME)
 PLOTS_DIR  <- file.path(OUTPUT_DIR, "plots")
+
+# ============================================================
+# DATOS DE ENTRADA
+# DATA_ROOT se recibe del orquestador.
+# ============================================================
+
+PATH_TRANSCRIPTOMICA <- file.path(
+  DATA_ROOT,
+  "transcriptomica.xlsx"
+)
+
+PATH_CITOQUINA <- file.path(
+  DATA_ROOT,
+  "citokina.csv"
+)
+
+PATH_MIOKINA <- file.path(
+  DATA_ROOT,
+  "miokina.csv"
+)
+
+PATH_METABOLOMA_POS <- file.path(
+  DATA_ROOT,
+  "5_03. METAHEALTH_POS_3 grupos_filtered_normalized.xlsx"
+)
+
+PATH_METABOLOMA_NEG <- file.path(
+  DATA_ROOT,
+  "5_04. METAHEALTH_NEG_3 grupos_filtered_normalized.xlsx"
+)
+
+PATH_CLINICOS <- file.path(
+  DATA_ROOT,
+  "clinicos.xlsx"
+)
+
+INPUT_FILES <- c(
+  transcriptomica = PATH_TRANSCRIPTOMICA,
+  citoquina       = PATH_CITOQUINA,
+  miokina         = PATH_MIOKINA,
+  metaboloma_pos  = PATH_METABOLOMA_POS,
+  metaboloma_neg  = PATH_METABOLOMA_NEG,
+  clinicos        = PATH_CLINICOS
+)
+
+missing_input_files <- INPUT_FILES[!file.exists(INPUT_FILES)]
+
+if (length(missing_input_files) > 0) {
+  stop(
+    "Faltan archivos de entrada en DATA_ROOT:\n",
+    paste(
+      paste0(
+        names(missing_input_files),
+        ": ",
+        missing_input_files
+      ),
+      collapse = "\n"
+    )
+  )
+}
 
 dir.create(OUTPUT_DIR, recursive = TRUE, showWarnings = FALSE)
 dir.create(PLOTS_DIR,  recursive = TRUE, showWarnings = FALSE)
@@ -191,8 +252,11 @@ if (!length(CLINICAL_VARS)) {
 }
 
 cat("\n============================================================\n")
+
+
 cat("ANÁLISIS:", ANALYSIS_NAME, "\n")
 cat("OUTDIR_BASE:", OUTDIR_BASE, "\n")
+cat("DATA_ROOT:", DATA_ROOT, "\n")
 cat("OUTPUT_DIR:", OUTPUT_DIR, "\n")
 cat("PLOTS_DIR:", PLOTS_DIR, "\n")
 cat("Q_TX:", Q_TX, "\n")
@@ -1690,8 +1754,9 @@ extract_for_model <- function(fx_obj) {
 ##==codigo====
 
 # 1) Metadata base
-transcriptomica <- fun_process_transcriptomics("../data/transcriptomica.xlsx")
-
+transcriptomica <- fun_process_transcriptomics(
+  PATH_TRANSCRIPTOMICA
+)
 # 2) Split global único
 sp <- define_split_ids(
   samples_metadata = transcriptomica$samples_metadata,
@@ -1702,8 +1767,8 @@ sp <- define_split_ids(
 
 # 3) Proteoma (NO volver a quitar outliers aquí)
 res_prot <- process_proteoma(
-  path_citoquina = "../data/citokina.csv",
-  path_miokina   = "../data/miokina.csv",
+  path_citoquina = PATH_CITOQUINA,
+  path_miokina   = PATH_MIOKINA,
   metadata = transcriptomica$samples_metadata,
   y = sp$y_master,
   fixed_keep_ids  = sp$keep_ids,
@@ -1726,8 +1791,8 @@ res_tx <- prepare_transcriptomics_for_model(
 
 # 5) Metaboloma
 res_met <- process_metaboloma(
-  path_pos = "../data/5_03. METAHEALTH_POS_3 grupos_filtered_normalized.xlsx",
-  path_neg = "../data/5_04. METAHEALTH_NEG_3 grupos_filtered_normalized.xlsx",
+  path_pos = PATH_METABOLOMA_POS,
+  path_neg = PATH_METABOLOMA_NEG,
   metadata = transcriptomica$samples_metadata,
   y = sp$y_master,
   fixed_keep_ids  = sp$keep_ids,
@@ -1739,7 +1804,7 @@ res_met <- process_metaboloma(
 
 # 6) Clínicos
 res_cli <- process_clinicos(
-  path_excel = "../data/clinicos.xlsx",
+  path_excel = PATH_CLINICOS,
   metadata   = transcriptomica$samples_metadata,
   y = sp$y_master,
   fixed_keep_ids  = sp$keep_ids,
@@ -2040,6 +2105,7 @@ saveRDS(
 run_config_preprocess <- data.frame(
   analysis_name = ANALYSIS_NAME,
   outdir_base = OUTDIR_BASE,
+  data_root = DATA_ROOT,
   output_dir = OUTPUT_DIR,
   plots_dir = PLOTS_DIR,
   

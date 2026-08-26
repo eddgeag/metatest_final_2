@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "${ROOT}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd -P)"
+WORKSPACE_ROOT="$(cd -- "${REPO_ROOT}/.." >/dev/null 2>&1 && pwd -P)"
+DATA_ROOT="${DATA_ROOT:-${WORKSPACE_ROOT}/data}"
+RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_ROOT}/results}"
+COMPARISON_ROOT="${COMPARISON_ROOT:-${RESULTS_ROOT}/comparacion_modelamientos}"
+export REPO_ROOT WORKSPACE_ROOT DATA_ROOT RESULTS_ROOT COMPARISON_ROOT
+cd "${REPO_ROOT}"
 
-REPORT_DIR="${ROOT}/.server_runs/preflight_$(date -u +%Y%m%dT%H%M%SZ)"
+CONFIG_FILE="${CONFIG_FILE:-${REPO_ROOT}/config/recursos_servidor.env}"
+[[ -f "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
+
+REPORT_DIR="${RESULTS_ROOT}/.server_runs/preflight_$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "${REPORT_DIR}"
 REPORT="${REPORT_DIR}/preflight.txt"
 FAIL=0
@@ -22,7 +31,10 @@ need_cmd () {
 
 echo "PRE-FLIGHT METATEST"
   echo "UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "ROOT: ${ROOT}"
+  echo "REPO_ROOT: ${REPO_ROOT}"
+  echo "DATA_ROOT: ${DATA_ROOT}"
+  echo "RESULTS_ROOT: ${RESULTS_ROOT}"
+  echo "COMPARISON_ROOT: ${COMPARISON_ROOT}"
   echo
   echo "== Sistema =="
   uname -a
@@ -37,7 +49,7 @@ echo "PRE-FLIGHT METATEST"
   swapon --show 2>/dev/null || true
   echo
   echo "== Disco =="
-  df -h "${ROOT}"
+  df -h "${RESULTS_ROOT}"
   echo
   echo "== Scheduler/cgroup =="
   echo "SLURM_JOB_ID=${SLURM_JOB_ID:-}"
@@ -64,12 +76,22 @@ git describe --always --dirty --tags 2>/dev/null || true
 
 REQUIRED=(
   renv.lock
-  preprocess_data.R INTEGRACION.R modelamiento2.R modelamiento3.R
-  panel_final_multimodelo.R downstream.R FRAMEWORK_BIDIRECCIONAL.R
-  run_comparacion_modelamiento2_vs_3_memoria_servidor.sh
-  plantillas/plantilla_1_todas_clinicas_barrido.tsv
-  plantillas/plantilla_2_con_FLI_barrido.tsv
-  plantillas/plantilla_3_sin_FLI_barrido.tsv
+  renv/activate.R
+  scripts/pipeline/preprocess_data.R
+  scripts/pipeline/INTEGRACION.R
+  scripts/pipeline/modelamiento2.R
+  scripts/pipeline/modelamiento3.R
+  scripts/pipeline/panel_final_multimodelo.R
+  scripts/pipeline/downstream.R
+  scripts/pipeline/FRAMEWORK_BIDIRECCIONAL.R
+  scripts/run_comparacion_modelamiento2_vs_3.sh
+  templates/current/plantilla_1_todas_clinicas_barrido.tsv
+  templates/current/plantilla_2_con_FLI_barrido.tsv
+  templates/current/plantilla_3_sin_FLI_barrido.tsv
+  config/recursos_servidor.env
+  reproducibilidad/entorno_R_y_cmdstan.txt
+  scripts/utilities/crear_mapa_clinico_maestro.R
+  scripts/utilities/crear_mapa_proteico_maestro.R
 )
 
 for f in "${REQUIRED[@]}"; do
@@ -79,20 +101,43 @@ for f in "${REQUIRED[@]}"; do
   fi
 done
 
-for f in plantillas/plantilla_{1_todas_clinicas,2_con_FLI,3_sin_FLI}_barrido.tsv; do
-  [[ -f "${f}" ]] || continue
+for TEMPLATE_FILE in \
+  templates/current/plantilla_1_todas_clinicas_barrido.tsv \
+  templates/current/plantilla_2_con_FLI_barrido.tsv \
+  templates/current/plantilla_3_sin_FLI_barrido.tsv
+do
   if ! awk -F '\t' '
     /^#/ || NF==0 {next}
     $1=="ANALYSIS_NAME" {if(NF!=11) exit 2; header++; next}
     {if(NF!=11 || seen[$1]++) exit 3; n++}
     END {if(header!=1 || n!=67) exit 4}
-  ' "${f}"; then
-    echo "Plantilla inválida (se esperan 67 escenarios, 11 columnas, IDs únicos): ${f}"
+  ' "${TEMPLATE_FILE}"; then
+    echo "Plantilla activa inválida (se esperan 67 filas, 11 columnas e IDs únicos): ${TEMPLATE_FILE}"
     FAIL=1
   else
-    echo "OK plantilla: ${f}"
+    echo "OK plantilla activa: ${TEMPLATE_FILE}"
   fi
 done
+
+if [[ ! -d "${DATA_ROOT}" ]]; then
+  echo "FALTA DATA_ROOT: ${DATA_ROOT}"
+  FAIL=1
+else
+  DATA_FILES=(
+    "transcriptomica.xlsx"
+    "citokina.csv"
+    "miokina.csv"
+    "5_03. METAHEALTH_POS_3 grupos_filtered_normalized.xlsx"
+    "5_04. METAHEALTH_NEG_3 grupos_filtered_normalized.xlsx"
+    "clinicos.xlsx"
+  )
+  for f in "${DATA_FILES[@]}"; do
+    if [[ ! -s "${DATA_ROOT}/${f}" ]]; then
+      echo "FALTA input requerido: ${DATA_ROOT}/${f}"
+      FAIL=1
+    fi
+  done
+fi
 
 if [[ -f reproducibilidad/entorno_R_y_cmdstan.txt ]]; then
   LOCAL_R="$(sed -n 's/^R_VERSION=R version \([^ ]*\).*/\1/p' reproducibilidad/entorno_R_y_cmdstan.txt | head -n1)"
@@ -103,7 +148,7 @@ if [[ -f reproducibilidad/entorno_R_y_cmdstan.txt ]]; then
   fi
 fi
 
-FREE_GB="$(df -Pk "${ROOT}" | awk 'NR==2 {print int($4/1024/1024)}')"
+FREE_GB="$(df -Pk "${RESULTS_ROOT}" | awk 'NR==2 {print int($4/1024/1024)}')"
 MIN_FREE_DISK_GB="${MIN_FREE_DISK_GB:-100}"
 if (( FREE_GB < MIN_FREE_DISK_GB )); then
   echo "ERROR: solo ${FREE_GB} GiB libres; mínimo solicitado ${MIN_FREE_DISK_GB} GiB."

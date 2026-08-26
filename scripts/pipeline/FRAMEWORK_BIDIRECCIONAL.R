@@ -3761,9 +3761,22 @@ run_mofa_dual_feature_differential_ranking <- function(scenario_dir,
 
 .find_reference_maps_dir <- function(start_dir = getwd()) {
   
-  start_dir <- normalizePath(path.expand(start_dir), mustWork = FALSE)
+  start_dir <- normalizePath(
+    path.expand(start_dir),
+    mustWork = FALSE
+  )
+
+  repo_root_env <- Sys.getenv(
+    "REPO_ROOT",
+    unset = ""
+  )
   
   candidates <- unique(c(
+    if (nzchar(repo_root_env)) {
+      file.path(repo_root_env, "reference_maps")
+    } else {
+      character(0)
+    },
     file.path(getwd(), "reference_maps"),
     file.path(dirname(getwd()), "reference_maps"),
     file.path(start_dir, "reference_maps")
@@ -3772,19 +3785,35 @@ run_mofa_dual_feature_differential_ranking <- function(scenario_dir,
   cur <- start_dir
   
   for (i in seq_len(12)) {
-    candidates <- unique(c(candidates, file.path(cur, "reference_maps")))
+    candidates <- unique(
+      c(
+        candidates,
+        file.path(cur, "reference_maps")
+      )
+    )
+
     parent <- dirname(cur)
-    if (identical(parent, cur)) break
+
+    if (identical(parent, cur)) {
+      break
+    }
+
     cur <- parent
   }
   
-  candidates <- candidates[file.exists(candidates) & dir.exists(candidates)]
+  candidates <- candidates[
+    file.exists(candidates) &
+      dir.exists(candidates)
+  ]
   
   if (length(candidates) == 0) {
     return(NA_character_)
   }
   
-  normalizePath(candidates[1], mustWork = TRUE)
+  normalizePath(
+    candidates[1],
+    mustWork = TRUE
+  )
 }
 
 .row_has_any_nonempty <- function(df, cols) {

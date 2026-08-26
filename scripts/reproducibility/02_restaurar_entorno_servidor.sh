@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "${ROOT}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd -P)"
+WORKSPACE_ROOT="$(cd -- "${REPO_ROOT}/.." >/dev/null 2>&1 && pwd -P)"
+DATA_ROOT="${DATA_ROOT:-${WORKSPACE_ROOT}/data}"
+RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_ROOT}/results}"
+COMPARISON_ROOT="${COMPARISON_ROOT:-${RESULTS_ROOT}/comparacion_modelamientos}"
+export REPO_ROOT WORKSPACE_ROOT DATA_ROOT RESULTS_ROOT COMPARISON_ROOT
+cd "${REPO_ROOT}"
 
 export RENV_CONFIG_INSTALL_JOBS="${RENV_CONFIG_INSTALL_JOBS:-1}"
 export MAKEFLAGS="${MAKEFLAGS:--j1}"
 export AUTO_INSTALL_CMDSTAN="${AUTO_INSTALL_CMDSTAN:-1}"
 
-./01_preflight_servidor.sh
+"${SCRIPT_DIR}/01_preflight_servidor.sh"
 
-LOG_DIR="${ROOT}/.server_runs/restore_$(date -u +%Y%m%dT%H%M%SZ)"
+LOG_DIR="${RESULTS_ROOT}/.server_runs/restore_$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "${LOG_DIR}"
 
-Rscript -e '
-if (!requireNamespace("renv", quietly = TRUE)) {
-  install.packages("renv", repos = "https://cloud.r-project.org")
-}
+Rscript --vanilla -e '
+source("renv/activate.R")
 if ("sysreqs" %in% getNamespaceExports("renv")) {
   renv::sysreqs(check = TRUE, report = TRUE, collapse = TRUE)
 }
@@ -26,13 +30,15 @@ echo
 echo "Si el informe anterior muestra paquetes Linux faltantes, instálalos con el administrador"
 echo "y vuelve a ejecutar este script. Continuando con restore()..."
 
-Rscript -e '
+Rscript --vanilla -e '
+source("renv/activate.R")
 options(renv.config.install.jobs = 1L)
 renv::restore(prompt = FALSE, clean = FALSE, retry = FALSE)
 renv::status()
 ' 2>&1 | tee "${LOG_DIR}/02_renv_restore.txt"
 
-Rscript - <<'RS' 2>&1 | tee "${LOG_DIR}/03_validacion_paquetes_cmdstan.txt"
+Rscript --vanilla - <<'RS' 2>&1 | tee "${LOG_DIR}/03_validacion_paquetes_cmdstan.txt"
+source("renv/activate.R")
 critical <- c("brms", "cmdstanr", "MOFA2", "mixOmics", "caret", "clusterProfiler")
 missing <- critical[!vapply(critical, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing)) stop("Faltan paquetes críticos: ", paste(missing, collapse = ", "))
@@ -40,7 +46,7 @@ if (length(missing)) stop("Faltan paquetes críticos: ", paste(missing, collapse
 cat("Paquetes críticos OK\n")
 cmdstanr::check_cmdstan_toolchain(fix = FALSE)
 
-expected_file <- "reproducibilidad/entorno_R_y_cmdstan.txt"
+expected_file <- file.path(Sys.getenv("REPO_ROOT"), "reproducibilidad", "entorno_R_y_cmdstan.txt")
 expected <- ""
 if (file.exists(expected_file)) {
   lines <- readLines(expected_file, warn = FALSE)
