@@ -4540,7 +4540,19 @@ run_mofa_dual_feature_differential_ranking <- function(scenario_dir,
     dplyr::filter(view_code %in% c("tx", "pr"))
   
   if (nrow(gp_features) == 0) {
-    return(tibble::tibble())
+    return(
+      tibble::tibble(
+        feature_model = character(),
+        feature_label = character(),
+        view_code = character(),
+        selected_query = character(),
+        candidate_rank = integer(),
+        resolved_id = character(),
+        resolved_name = character(),
+        resolved_namespace = character(),
+        resolution_status = character()
+      )
+    )
   }
   
   candidates <- purrr::map_dfr(
@@ -4586,10 +4598,22 @@ run_mofa_dual_feature_differential_ranking <- function(scenario_dir,
         dplyr::slice_head(n = 1) %>%
         dplyr::ungroup() %>%
         dplyr::mutate(
+          selected_query = query_candidate,
           resolved_id = NA_character_,
           resolved_name = NA_character_,
           resolved_namespace = NA_character_,
           resolution_status = "gprofiler2_not_installed"
+        ) %>%
+        dplyr::select(
+          feature_model,
+          feature_label,
+          view_code,
+          selected_query,
+          candidate_rank,
+          resolved_id,
+          resolved_name,
+          resolved_namespace,
+          resolution_status
         )
     )
   }
@@ -4616,10 +4640,22 @@ run_mofa_dual_feature_differential_ranking <- function(scenario_dir,
         dplyr::slice_head(n = 1) %>%
         dplyr::ungroup() %>%
         dplyr::mutate(
+          selected_query = query_candidate,
           resolved_id = NA_character_,
           resolved_name = NA_character_,
           resolved_namespace = NA_character_,
           resolution_status = "no_gprofiler_conversion"
+        ) %>%
+        dplyr::select(
+          feature_model,
+          feature_label,
+          view_code,
+          selected_query,
+          candidate_rank,
+          resolved_id,
+          resolved_name,
+          resolved_namespace,
+          resolution_status
         )
     )
   }
@@ -4639,10 +4675,22 @@ run_mofa_dual_feature_differential_ranking <- function(scenario_dir,
         dplyr::slice_head(n = 1) %>%
         dplyr::ungroup() %>%
         dplyr::mutate(
+          selected_query = query_candidate,
           resolved_id = NA_character_,
           resolved_name = NA_character_,
           resolved_namespace = NA_character_,
           resolution_status = "unexpected_gconvert_columns"
+        ) %>%
+        dplyr::select(
+          feature_model,
+          feature_label,
+          view_code,
+          selected_query,
+          candidate_rank,
+          resolved_id,
+          resolved_name,
+          resolved_namespace,
+          resolution_status
         )
     )
   }
