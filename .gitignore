@@ -49,6 +49,12 @@
 
 !/reproducibilidad/
 !/reproducibilidad/*.txt
+!/reproducibilidad/release/
+!/reproducibilidad/release/*.env
+!/reproducibilidad/release/*.json
+!/reproducibilidad/release/*.sha256
+!/reproducibilidad/release/*.txt
+!/reproducibilidad/release/renv.lock.validated
 
 # ============================================================
 # RENV
