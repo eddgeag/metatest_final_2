@@ -107,7 +107,10 @@ for template in "${TEMPLATES[@]}"; do
   done < "$template"
 done
 (("${#PLAN_SCENARIO[@]}" > 0)) || die "selección vacía"
-for wanted in "${SELECTED[@]}"; do [[ -n "${FOUND[$wanted]:-}" ]] || die "no existe escenario: $wanted"; done
+# Bash anterior a 4.4: no expandir un array vacio con nounset activo.
+if (("${#SELECTED[@]}" > 0)); then
+  for wanted in "${SELECTED[@]}"; do [[ -n "${FOUND[$wanted]:-}" ]] || die "no existe escenario: $wanted"; done
+fi
 DATA="$(realpath -m "$DATA")" OUT="$(realpath -m "$OUT")" ASSETS="$(realpath -m "$ASSETS")"
 for path in "$DATA" "$OUT" "$ASSETS" "$REPO"; do
   [[ "$path" != *$'\n'* && "$path" != *$'\t'* ]] || die "ruta con TAB/newline"
