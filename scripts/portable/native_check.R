@@ -1,4 +1,6 @@
 # Verificacion del runtime nativo, sin restaurar paquetes ni entrenar modelos.
+native_smoke_packages <- c("renv", "ggplot2", "cmdstanr", "brms", "MOFA2", "basilisk",
+                           "basilisk.utils", "reticulate", "igraph", "readxl")
 fail <- function(...) stop(..., call. = FALSE)
 must <- function(condition, ...) if (!isTRUE(condition)) fail(...)
 norm <- function(path) normalizePath(path, mustWork = TRUE)
@@ -17,6 +19,9 @@ verify_library <- function(repo, lib) {
   lock <- jsonlite::fromJSON(file.path(repo, "renv.lock"), simplifyVector = FALSE)
   must(identical(lock$R$Version, "4.4.2") && length(lock$Packages) == 302L,
        "Lockfile ajeno al perfil nativo auditado")
+  extra <- setdiff(native_smoke_packages, names(lock$Packages))
+  must(length(extra) == 0L, "El chequeo exige paquetes ajenos a renv.lock: ",
+       paste(extra, collapse = ", "))
   ip <- installed.packages(lib.loc = lib, fields = c("RemoteSha", "Built"), noCache = TRUE)
   expected <- vapply(lock$Packages, function(x) x$Version, character(1))
   observed <- ip[match(names(expected), ip[, "Package"]), "Version"]
@@ -66,8 +71,7 @@ main <- function() {
   report <- norm(args[[2]])
   must(identical(norm(Sys.getenv("RETICULATE_PYTHON")), norm(backend[["RETICULATE_PYTHON"]])),
        "Python no coincide con el entorno Basilisk esperado")
-  for (p in c("renv", "ggplot2", "cmdstanr", "brms", "MOFA2", "basilisk",
-              "basilisk.utils", "reticulate", "igraph", "readxl", "openxlsx")) {
+  for (p in native_smoke_packages) {
     ns <- suppressPackageStartupMessages(loadNamespace(p, lib.loc = lib))
     must(identical(norm(getNamespaceInfo(ns, "path")), norm(file.path(lib, p))),
          "Paquete cargado fuera de la biblioteca elegida: ", p)
