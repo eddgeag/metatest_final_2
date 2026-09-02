@@ -15,14 +15,24 @@ finish() {
     printf 'METATEST_PORTABLE_RUN=%s\n' "$([[ $rc == 0 ]] && echo PASS || echo FAIL)"
     printf 'EXIT_STATUS=%s\nFINAL_STATUS=%s\nSCENARIO=%s\nSTAN_O=%s\nRESUME=%s\nWALLTIME_SECONDS=%s\nBACKEND=local\n'       "$rc" "$final" "$METATEST_SCENARIO_OVERRIDE" "$METATEST_STAN_O" "$METATEST_RESUME" "$(( $(date +%s)-start ))"
     printf 'NATIVE_ENVIRONMENT_NOT_CERTIFIED=TRUE\n'
+    printf 'NATIVE_RUNTIME_FINGERPRINT=%s\n' "${METATEST_NATIVE_FINGERPRINT:-UNKNOWN}"
     printf 'CODE_COMMIT=%s\n' "${METATEST_CODE_COMMIT:-UNKNOWN}"
     printf 'RUNTIME_BASE_COMMIT=%s\n' "${METATEST_RUNTIME_BASE_COMMIT:-UNKNOWN}"
   } > "$REPORT/job_report/99_FINAL_STATUS.env"
   exit "$rc"
 }
 trap finish EXIT
-command -v Rscript >/dev/null
 [[ -x /usr/bin/time ]]
+source "$REPO/scripts/portable/native_env.sh"
+metatest_native_prepare "$REPO" "$ARTIFACTS"
+if metatest_native_smoke "$REPO" "$ARTIFACTS" > "$ARTIFACTS/01_native_identity.txt" 2>&1; then
+  cat "$ARTIFACTS/01_native_identity.txt"
+else
+  cat "$ARTIFACTS/01_native_identity.txt" >&2
+  exit 1
+fi
+metatest_native_guard_resume "$OUT/.portable_state/$METATEST_SCENARIO_OVERRIDE" "$METATEST_RESUME"
+printf 'NATIVE_RUNTIME_FINGERPRINT=%s\n' "$METATEST_NATIVE_FINGERPRINT" > "$ARTIFACTS/native_runtime.env"
 export DATA_ROOT="$METATEST_DATA_DIR" RESULTS_ROOT="$OUT"
 export COMPARISON_ROOT="$OUT/comparacion_modelamientos"
 export ONLY_ANALYSIS_NAME="$METATEST_SCENARIO_OVERRIDE"
@@ -30,14 +40,6 @@ export PIPELINE_R_CORES=2 BRMS_INTERNAL_CORES=1 BLAS_THREADS=1
 export CMDSTAN_OPTIMIZATION_LEVEL="$METATEST_STAN_O"
 export METATEST_PHASE_TIMINGS="$ARTIFACTS/phase_timings.tsv"
 export RENV_CONFIG_AUTOLOADER_ENABLED=FALSE
-Rscript --vanilla - <<'R_CHECK' > "$ARTIFACTS/01_native_identity.txt"
-for (p in c("MOFA2", "basilisk", "reticulate", "cmdstanr", "brms")) {
-  stopifnot(requireNamespace(p, quietly=TRUE))
-  cat(p, as.character(packageVersion(p)), "\n")
-}
-cat("CMDSTAN=", cmdstanr::cmdstan_path(), "\n")
-print(sessionInfo())
-R_CHECK
 printf 'scenario\tmodel\tstage\tstart_epoch\tend_epoch\tseconds\texit_code\n' > "$METATEST_PHASE_TIMINGS"
 printf 'PIPELINE_START_UTC=%s\n' "$(date -u +%FT%TZ)" > "$ARTIFACTS/04_timing.env"
 set +e

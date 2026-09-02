@@ -26,6 +26,7 @@ metatest_verify_checkout() {
   }
   for path in run.sh run.sbatch PORTABLE_SHA256SUMS.txt scripts/portable/provenance.sh \
     scripts/portable/enroot.sh scripts/portable/local.sh scripts/portable/orchestrator.sh \
+    scripts/portable/native_env.sh scripts/portable/native_check.R scripts/portable/check_native.sh \
     scripts/portable/validate.sh scripts/portable/collect.sh; do
     (cd "$repo" && git ls-files --error-unmatch -- "$path" >/dev/null) || {
       printf 'ERROR: archivo portable sin versionar: %s\n' "$path" >&2; return 1;

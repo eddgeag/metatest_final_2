@@ -231,11 +231,18 @@ mkdir -p \
   "${R_RUNTIME_DIR}"
 
 ## Perfil temporal de R usado solamente durante esta comparación.
-## Conserva ~/.Rprofile si existe, limita parallel::detectCores()
+## Nativo: biblioteca explicita sin ~/.Rprofile. Enroot: comportamiento previo.
+## Limita parallel::detectCores()
 ## y deja los procesos internos de BRMS en un solo core.
 cat > "${R_PROFILE_LIMITED}" <<'RS_PROFILE'
 .user_profile <- path.expand("~/.Rprofile")
-if (file.exists(.user_profile)) {
+if (identical(Sys.getenv("METATEST_NATIVE_ENV_ACTIVE"), "1")) {
+  local({
+    lib <- normalizePath(Sys.getenv("METATEST_R_LIBRARY"), mustWork = TRUE)
+    .libPaths(c(lib, .Library), include.site = FALSE)
+    stopifnot(as.character(getRversion()) == "4.4.2")
+  })
+} else if (file.exists(.user_profile)) {
   try(sys.source(.user_profile, envir = .GlobalEnv), silent = TRUE)
 }
 

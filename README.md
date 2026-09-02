@@ -55,9 +55,63 @@ bash run.sh --backend enroot --stan-o 1 \
 
 `--plantillas` y `--scenario` admiten varias apariciones. Sin `--slurm`, el
 backend Enroot se ejecuta en el nodo actual: usar solo un nodo de computo.
-`--backend local` usa el R/CmdStan ya configurado; no instala ni certifica ese
-entorno. El rebuild automatico O1 solo esta disponible en Enroot. O0 sigue
+`--backend local` selecciona y comprueba el entorno nativo descrito abajo;
+no instala ni certifica equivalencia cientifica con Enroot. El rebuild automatico
+O1 solo esta disponible en Enroot. O0 sigue
 siendo el valor por defecto; O1 debe pedirse explicitamente.
+
+## Portatil o servidor propio sin Enroot, Docker ni Slurm
+
+Se requieren R 4.4.2, los 302 paquetes y versiones de `renv.lock`, CmdStan
+2.36.0, y el entorno Basilisk de MOFA2 1.16.0 con mofapy2 0.7.0 ya instalado.
+Git no transporta estas dependencias. Un clon nuevo necesita restaurar su
+biblioteca; no basta `git clone` para preparar una maquina vacia.
+No usar el antiguo restore de CEDIA como instalador nativo automatico.
+
+El runner busca una unica biblioteca de proyecto `renv/library/*/R-4.4/...`.
+Opcionalmente `METATEST_R_LIBRARY` permite elegir explicitamente otra
+biblioteca ya preparada y verificable. `METATEST_CMDSTAN` (o `CMDSTAN`)
+selecciona CmdStan; el valor por defecto es `~/.cmdstan/cmdstan-2.36.0`.
+Basilisk consulta su propia cache, o `BASILISK_EXTERNAL_DIR` si se especifica.
+No hay rutas de usuario incrustadas en el codigo. No se descarga Python ni
+se restauran paquetes durante una corrida: si faltan, la comprobacion se detiene.
+
+Rscript y sus workers reciben la biblioteca del proyecto mas la biblioteca
+base de R. Se ignoran los perfiles y bibliotecas globales, no se modifica
+`~/.Rprofile`, y se fija `RETICULATE_PYTHON` al Python del entorno MOFA.
+Se conserva la cache de Basilisk (incluidos otros entornos); sus locks necesitan
+permisos de escritura. El CmdStan instalado no se limpia ni se reconstruye
+automaticamente. La compilacion normal de modelos puede generar su cache.
+
+Primero, solo dependencias e inputs (sin pipeline y sin compilar Stan):
+
+```bash
+bash scripts/portable/check_native.sh --data ../data --outdir ../results/prueba_nativa
+```
+
+El smoke verifica versiones/RemoteSha registrados, carga paquetes incluido
+igraph y prueba la conexion R-reticulate-Basilisk-MOFA. Guarda logs y una huella
+del runtime fuera del repositorio. No valida rendimiento, toda la compilacion
+C++, ni resultados cientificos. Repite estas comprobaciones al ejecutar.
+
+Despues de `NATIVE_CHECK=PASS`, un unico escenario q90 con ambos modelos:
+
+```bash
+bash run.sh --backend local --stan-o 0 \
+  --scenario P1_TODAS_qtx90_qpr45_qme90_qcl45 \
+  --data ../data --outdir ../results/prueba_nativa_P1_q90
+```
+
+No anadir `--slurm` en una maquina sin Slurm. La corrida es en primer plano;
+no cerrar la terminal durante la prueba. Se usan los limites conservadores
+del runner (2 cores de pipeline, 1 interno/BLAS), no todos los CPUs detectados.
+El escenario q90 no sustituye una aceptacion q00 nativa posterior.
+Sin `--scenario`, `--fila` ni `--pilot`, `run.sh` ejecuta los 201 escenarios.
+
+La huella nativa incluye versiones/builds de paquetes, binarios criticos,
+inventario Python, rutas y compilador. `--resume` rechaza una huella distinta
+o ausente; se debe usar un outdir nuevo si cambia el entorno. No es una imagen
+sellada ni garantiza identidad binaria de todo el sistema operativo.
 
 ## Reproducibilidad y trabajo diario
 
