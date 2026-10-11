@@ -65,6 +65,7 @@ export WORKSPACE_ROOT
 export DATA_ROOT
 export RESULTS_ROOT
 export COMPARISON_ROOT
+export METATEST_REPO_ROOT="${REPO_ROOT}"
 
 
 TEMPLATES=(
@@ -236,6 +237,14 @@ cat > "${R_PROFILE_LIMITED}" <<'RS_PROFILE'
 if (file.exists(.user_profile)) {
   try(sys.source(.user_profile, envir = .GlobalEnv), silent = TRUE)
 }
+
+# Activar renv después del perfil personal de R.
+.renv_root <- Sys.getenv("METATEST_REPO_ROOT", unset = "")
+if (!nzchar(.renv_root)) stop("METATEST_REPO_ROOT no definido")
+.renv_activate <- file.path(.renv_root, "renv", "activate.R")
+if (!file.exists(.renv_activate)) stop("Falta renv/activate.R")
+source(.renv_activate, local = FALSE)
+rm(.renv_root, .renv_activate)
 
 .pipeline_cores <- suppressWarnings(
   as.integer(Sys.getenv("PIPELINE_R_CORES", unset = "2"))

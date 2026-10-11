@@ -122,6 +122,9 @@ run_step() {
     echo "ERROR: falló $step. Logs: $LOG_ROOT" >&2; exit 1
   fi
 }
+if ((CHECK)); then
+  Rscript "$REPO/scripts/reproducibility/check_renv_vigente.R" | tee "$LOG_ROOT/preflight.log"
+fi
 if [[ "$PHASE" == upstream || "$PHASE" == all ]]; then
   [[ -d "$DATA_ROOT" ]] || { echo "Falta DATA_ROOT=$DATA_ROOT" >&2; exit 1; }
   # El upstream histórico requiere inputs y recursos ya preparados.
@@ -150,9 +153,6 @@ if [[ "$PHASE" == all || "$PHASE" == biomarkers ]]; then
   }
   export SELECTION_RUN
   printf 'SELECTION_RUN=%s\n' "$SELECTION_RUN" >> "$LOG_ROOT/ejecucion.txt"
-  if ((CHECK)); then
-    Rscript "$REPO/scripts/reproducibility/check_renv_vigente.R" | tee "$LOG_ROOT/preflight.log"
-  fi
   for i in "${!STEPS[@]}"; do
     s="${STEPS[$i]}"
     if ((10#$s>=10#$FROM && 10#$s<=10#$TO)); then
