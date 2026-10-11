@@ -1,0 +1,26 @@
+# OPCIONAL. Construir SOLO después de actualizar y validar renv.lock en LOCAL.
+# Al fijar un digest inmutable de la base, la construcción queda más controlada.
+FROM rocker/r-ver:4.4.2
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  git curl ca-certificates wget unzip make cmake g++ gfortran python3 python3-venv \
+  libcurl4-openssl-dev libssl-dev libxml2-dev libgit2-dev libglpk-dev \
+  libgsl-dev libgmp3-dev libudunits2-dev libhdf5-dev libicu-dev \
+  libfontconfig1-dev libfreetype6-dev libharfbuzz-dev libfribidi-dev \
+  libpng-dev libtiff-dev libjpeg-dev libxt-dev libopenblas-dev \
+  libmagick++-dev libsodium-dev libnlopt-dev zlib1g-dev libbz2-dev liblzma-dev \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/metatest
+COPY . /opt/metatest
+# Preflight fail-fast del lockfile antes de hacer build pesado.
+
+RUN Rscript -e 'if (!requireNamespace("renv", quietly=TRUE)) install.packages("renv", repos="https://cloud.r-project.org"); renv::restore(project="/opt/metatest", prompt=FALSE)'
+RUN Rscript -e 'source("renv/activate.R"); stopifnot(all(vapply(c("msigdbr","msgl","sglOptim"), requireNamespace, logical(1), quietly=TRUE)))'
+# Compilación de CmdStan histórico. Necesita red en la construcción.
+RUN Rscript -e 'source("renv/activate.R"); cmdstanr::install_cmdstan(dir="/opt/cmdstan", version="2.36.0", cores=2)'
+ENV CMDSTAN=/opt/cmdstan/cmdstan-2.36.0
+ENV RESULTS_ROOT=/workspace/results DATA_ROOT=/workspace/data
+ENV UPSTREAM_DIR=/workspace/results/comparacion_modelamientos/upstream_comun
+ENV R_PROFILE_USER=/opt/metatest/scripts/reproducibility/activate_renv.Rprofile
+ENV METATEST_REPO_ROOT=/opt/metatest
+CMD ["bash", "scripts/orchestration/run_metatest_vigente.sh", "--phase", "biomarkers"]

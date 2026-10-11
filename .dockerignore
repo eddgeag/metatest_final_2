@@ -1,0 +1,12 @@
+.git
+renv/library
+renv/staging
+renv/python
+results
+results_upstream*
+data
+*.zip
+*.rds
+*.RDS
+*.h5
+*.log

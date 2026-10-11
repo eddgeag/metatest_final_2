@@ -136,3 +136,9 @@ renv/sandbox/
 *.fst
 *.h5
 *.hdf5
+
+# Pipeline nuevo: contenerización explícita
+!/Dockerfile.metatest-vigente
+!/.dockerignore
+
+!/scripts/reproducibility/activate_renv.Rprofile

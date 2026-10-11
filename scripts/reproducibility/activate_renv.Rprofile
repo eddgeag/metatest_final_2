@@ -1,0 +1,5 @@
+root <- Sys.getenv("METATEST_REPO_ROOT", unset = "")
+if (!nzchar(root)) stop("METATEST_REPO_ROOT no definido")
+activate <- file.path(root, "renv", "activate.R")
+if (!file.exists(activate)) stop("No existe renv/activate.R en ", root)
+source(activate)
