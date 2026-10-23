@@ -1,0 +1,11 @@
+# METATEST2 barrido TX/ME diagonal, con PR=CL=0; original clinico preservado.
+# SOLO_NUEVOS: runner; TODOS: inventario, NO introducir ambos en el runner.
+ANALYSIS_NAME	OUTDIR_BASE	Q_TX	Q_PR	Q_ME	Q_CL	PANEL_CHOICE	CLINICAL_INCLUDE	CLINICAL_EXCLUDE	MODEL_SOURCE	DIAG_TARGET
+P2_CON_FLI_qtx80_qpr00_qme80_qcl00	./escenarios_con_FLI	0.80	0.00	0.80	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
+P2_CON_FLI_qtx85_qpr00_qme85_qcl00	./escenarios_con_FLI	0.85	0.00	0.85	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
+P2_CON_FLI_qtx90_qpr00_qme90_qcl00	./escenarios_con_FLI	0.90	0.00	0.90	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
+P2_CON_FLI_qtx93_qpr00_qme93_qcl00	./escenarios_con_FLI	0.93	0.00	0.93	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
+P2_CON_FLI_qtx94_qpr00_qme94_qcl00	./escenarios_con_FLI	0.94	0.00	0.94	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
+P2_CON_FLI_qtx96_qpr00_qme96_qcl00	./escenarios_con_FLI	0.96	0.00	0.96	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
+P2_CON_FLI_qtx97_qpr00_qme97_qcl00	./escenarios_con_FLI	0.97	0.00	0.97	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
+P2_CON_FLI_qtx98_qpr00_qme98_qcl00	./escenarios_con_FLI	0.98	0.00	0.98	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
