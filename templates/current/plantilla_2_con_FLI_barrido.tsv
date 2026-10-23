@@ -86,4 +86,3 @@ P2_CON_FLI_qtx99_qpr35_qme99_qcl55	./escenarios_con_FLI	0.99	0.35	0.99	0.55	FINA
 P2_CON_FLI_qtx99_qpr50_qme99_qcl40	./escenarios_con_FLI	0.99	0.50	0.99	0.40	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
 P2_CON_FLI_qtx99_qpr40_qme99_qcl50	./escenarios_con_FLI	0.99	0.40	0.99	0.50	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
 P2_CON_FLI_qtx99_qpr45_qme99_qcl45	./escenarios_con_FLI	0.99	0.45	0.99	0.45	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
-P2_CON_FLI_qtx95_qpr00_qme95_qcl00	./escenarios_con_FLI	0.95	0.00	0.95	0.00	FINAL	GGT|Glu|Col total|LDL|HDL|TG|PCR|Insulina|HOMA-IR|QUICKI|TG-INDEX|FLI|TG/HDL|Sis|Dias		NEW	BOTH
